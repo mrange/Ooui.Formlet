@@ -32,15 +32,15 @@ module Formlets =
   type [<Struct>] Formlet<'T> = 
     | FL of (FormletContext -> FormletChangeNotification -> FormletFailureContext -> FormletTree -> FormletResult<'T>)
 
+  module Details =
+    let inline fadapt (FL t) = OptimizedClosures.FSharpFunc<_, _, _, _, _>.Adapt t
+
+    let inline finvoke (t : OptimizedClosures.FSharpFunc<_, _, _, _, _>) fc fcn ffc ft = t.Invoke (fc, fcn, ffc, ft)
+
+  open Details
+
   module Formlet =
     open FSharp.Core.Printf
-
-    module Details =
-      let inline fadapt (FL t) = OptimizedClosures.FSharpFunc<_, _, _, _, _>.Adapt t
-
-      let inline finvoke (t : OptimizedClosures.FSharpFunc<_, _, _, _, _>) fc fcn ffc ft = t.Invoke (fc, fcn, ffc, ft)
-
-    open Details
 
     let value (v : 'T) : Formlet<'T> =
       FL <| fun fc fcn ffc ft ->
@@ -66,7 +66,7 @@ module Formlets =
         let u  = uf tv
         let uf = fadapt u
 
-        let (FR (uv, ufft, uft)) = finvoke uf fc fcn ffc tft
+        let (FR (uv, ufft, uft)) = finvoke uf fc fcn ffc uft
 
         FR (uv, FormletFailureTree.Join tfft ufft, FormletTree.Fork (tft, uft))
 
@@ -106,19 +106,78 @@ module Formlets =
     static member inline (<&>) (l, r)   = Formlet.andAlso l r
 *)
 
+  module Inputs =
+    let text initial : Formlet<string> = 
+      FL <| fun fc fcn ffc ft ->
+        let e =
+          match ft with
+          | FormletTree.Element (:? Input as e) when e.Type = InputType.Text ->
+            e
+          | _ ->
+            let e = Input InputType.Text
+            let (FCN fcn) = fcn
+            e.Change.Add (fun _ -> fcn ())
+            e.Value <- initial
+            e
+        FR (e.Value, FormletFailureTree.Empty, FormletTree.Element e)
+
+    let checkBox initial : Formlet<bool> = 
+      FL <| fun fc fcn ffc ft ->
+        let e =
+          match ft with
+          | FormletTree.Element (:? Input as e) when e.Type = InputType.Checkbox ->
+            e
+          | _ ->
+            let e = Input InputType.Checkbox
+            let (FCN fcn) = fcn
+            e.Change.Add (fun _ -> fcn ())
+            e.IsChecked <- initial
+            e
+        FR (e.IsChecked, FormletFailureTree.Empty, FormletTree.Element e)
 
   module View =
-    open Formlet.Details
-    let update (t : Formlet<'T>) (ft : FormletTree) (div : Div) =
-      let rec buildTree (parent : Node) (position : int) (ft: FormletTree) =
+    let attachTo (t : Formlet<'T>) (div : Div) : unit =
+      let rec buildTree (children : ResizeArray<Node>) (ft : FormletTree) =
         match ft with
         | FormletTree.Empty -> 
-        ()
+          ()
+        | FormletTree.Element e -> 
+          children.Add e
+        | FormletTree.Adorner (e, ft) ->
+          buildSubTree e ft
+        | FormletTree.Fork (lft, rft) -> 
+          buildTree children lft
+          buildTree children rft
+      and buildSubTree (node : Node) (ft : FormletTree) =
+        let nestedChildren = ResizeArray node.Children.Count
+        buildTree nestedChildren ft
+        node.ReplaceChildren nestedChildren 
+      let mutable ft = FormletTree.Empty
       let fc = FC ()
-      let fcn = FCN (fun () -> printfn "Change request")
       let ffc = FFC []
       let tf = fadapt t
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
-      buildTree div 0 tft
+      let rec fcn = FCN (fun () -> 
+          printfn "Change request"
+          update ()
+        )
+      and update () =
+        printfn "FormletTree(Before): %A" ft
+        let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+        printfn "Formlet Tree(After): %A" tft
+        printfn "Value: %A" tv
+        printfn "Failure Tree: %A" tfft
+        buildSubTree div tft
+        ft <- tft
 
-      struct (tv, tfft, tft)
+      update ()
+
+  module Test =
+    let test (div : Div) =
+      let t = 
+        formlet {
+          let! f = Inputs.text "hello"
+          let! s = Inputs.text "there"
+          let! t = Inputs.checkBox false
+          return f, s, t
+        }
+      View.attachTo t div
