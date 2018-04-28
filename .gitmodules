@@ -1,0 +1,4 @@
+[submodule "Ooui"]
+	path = Ooui
+	url = https://github.com/mrange/Ooui.git
+	branch = marrange/experimenting
