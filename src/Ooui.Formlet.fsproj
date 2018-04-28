@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Ooui" Version="0.10.222" />
+    <ProjectReference Include="..\Ooui\Ooui\Ooui.csproj" />
   </ItemGroup>
 
 </Project>
