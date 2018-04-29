@@ -257,14 +257,12 @@ module Formlets =
         formlet {
           let! _1 = input    "Hello"
           let! _2 = checkBox "Check me!"
-          let! _3 = input    "There"
-(*
+//          let! _3 = input    "There"
           let! _3 = 
             if _2 then
               input "There"
             else
               Formlet.value ""
-              *)
           let! _4 = input    "Other"
           return _1, _2, _3, _4
         } |> Adorn.withElement Form ""
