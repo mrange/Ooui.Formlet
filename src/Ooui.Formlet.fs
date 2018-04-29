@@ -82,11 +82,28 @@ module Formlets =
 
         FR (uv, FormletFailureTree.Join tfft ufft, FormletTree.Fork (tft, uft))
 
-    // TODO: Optimize
+    let apply (f: Formlet<'T -> 'U>) (t : Formlet<'T>) : Formlet<'U> = 
+      let ff = fadapt f
+      let tf = fadapt t
+      FL <| fun fc fcn ffc ft ->
 
-    let apply f t = bind f (fun ff -> bind t (fun tv -> value (ff tv)))
+        let fft, tft =
+          match ft with
+          | FormletTree.Fork (fft, tft) -> fft              , tft
+          | _                           -> FormletTree.Empty, FormletTree.Empty
 
-    let map m t = bind t (fun tv -> value tv)
+        let (FR (ff, ffft, fft)) = finvoke ff fc fcn ffc fft
+        let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc tft
+
+        FR (ff tv, FormletFailureTree.Join ffft tfft, FormletTree.Fork (fft, tft))
+
+    let map m (t : Formlet<'T>) : Formlet<'U> = 
+      let tf = fadapt t
+      FL <| fun fc fcn ffc ft ->
+
+        let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+
+        FR (m tv, tfft, tft)
 
     let validate (validator : 'T -> string option) (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
@@ -255,21 +272,30 @@ module Formlets =
       update ()
 
   module Test =
+    type Customer =
+      {
+        FirstName     : string
+        LastName      : string
+        CompanyOwner  : bool
+        CompanyNo     : string
+      }
+      static member New fn ln co cno : Customer = 
+        {
+          FirstName     = fn
+          LastName      = ln
+          CompanyOwner  = co
+          CompanyNo     = cno
+        }
     let label   lbl t = t |> Enhance.withLabel lbl |> Surround.withElement Div "form-group"
     let input     lbl = Inputs.text lbl ""    |> label lbl
     let checkBox  lbl = Inputs.checkBox false |> label lbl
     let test (node : Node) =
-      let t = 
-        formlet {
-          let! _1 = input    "Hello"
-          let! _2 = checkBox "Check me!"
-//          let! _3 = input    "There"
-          let! _3 = 
-            if _2 then
-              input "There"
-            else
-              Formlet.value ""
-          let! _4 = input    "Other"
-          return _1, _2, _3, _4
-        } |> Surround.withElement Form ""
+      let t =
+        Formlet.value Customer.New
+        <*> input     "First name"
+        <*> input     "Last name"
+        <*> checkBox  "Is company owner"
+        <*> input     "Company No"
+        |> Surround.withElement Form ""
+
       View.attachTo t node
