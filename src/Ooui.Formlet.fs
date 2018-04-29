@@ -368,7 +368,7 @@ module Formlets =
         |>> Company
         |> Enhance.withGroupBox "Company"
  
-      let t =
+      let entity =
         formlet {
           let! isCompany  = checkBox "Is company?"
           let! entity     =
@@ -379,4 +379,4 @@ module Formlets =
           return entity
         }
 
-      View.attachTo (t |> Surround.withElement Form "")  node
+      View.attachTo (entity |> Surround.withElement Form "")  node
