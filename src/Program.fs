@@ -29,13 +29,14 @@ let main argv =
   
   UI.Port <- 8800
 
-  let form = Form ()
+  let div = Div ()
+  div.Style.Margin <- "10px"
 
-  let fr = Test.test form
+  let fr = Test.test div
 
   printfn "%A" fr
   
-  UI.Publish ("/formlet", form)
+  UI.Publish ("/formlet", div)
 
   Console.ReadLine () |> ignore
 

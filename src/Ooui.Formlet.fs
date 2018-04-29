@@ -119,17 +119,19 @@ module Formlets =
 *)
 
   module Adorn =
-    let withDiv (t : Formlet<'T>) : Formlet<'T> =
+    let withElement (creator : unit -> #Element) ``class`` (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
           
         let e, ft =
           match ft with
-          | FormletTree.Adorner ((:? Div as e), sft) ->
+          | FormletTree.Adorner ((:? #Element as e), sft) ->
             e, sft
           | _ ->
-            let e = Div ()
+            let e = creator ()
             e, FormletTree.Empty
+
+        e.ClassName <- ``class`` 
 
         let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
 
@@ -160,8 +162,10 @@ module Formlets =
             e, sft
           | _ ->
             let e = Label label
-            e.Style.Width <- "100px"
+//            e.Style.Width <- "100px"
             e, FormletTree.Empty
+
+        e.Text <- label
 
         let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
         
@@ -173,7 +177,8 @@ module Formlets =
 
 
   module Inputs =
-    let text initial : Formlet<string> = 
+
+    let text placeholder initial : Formlet<string> = 
       FL <| fun fc fcn ffc ft ->
         let e =
           match ft with
@@ -185,6 +190,10 @@ module Formlets =
             e.Change.Add (fun _ -> fcn ())
             e.Value <- initial
             e
+
+        e.Placeholder <- placeholder
+        e.ClassName   <- "form-control"
+
         FR (e.Value, FormletFailureTree.Empty, FormletTree.Element e)
 
     let checkBox initial : Formlet<bool> = 
@@ -199,10 +208,11 @@ module Formlets =
             e.Change.Add (fun _ -> fcn ())
             e.IsChecked <- initial
             e
+
         FR (e.IsChecked, FormletFailureTree.Empty, FormletTree.Element e)
 
   module View =
-    let attachTo (t : Formlet<'T>) (form : Form) : unit =
+    let attachTo (t : Formlet<'T>) (node : Node) : unit =
       let rec buildTree (children : ResizeArray<Node>) (ft : FormletTree) =
         match ft with
         | FormletTree.Empty -> 
@@ -233,21 +243,29 @@ module Formlets =
         printfn "Formlet Tree(After): %A" tft
         printfn "Value: %A" tv
         printfn "Failure Tree: %A" tfft
-        buildSubTree form tft
+        buildSubTree node tft
         ft <- tft
 
       update ()
 
   module Test =
-    let label   lbl t = t |> Enhance.withLabel lbl |> Adorn.withDiv
-    let input     lbl = Inputs.text ""        |> label lbl
+    let label   lbl t = t |> Enhance.withLabel lbl |> Adorn.withElement Div "form-group"
+    let input     lbl = Inputs.text lbl ""    |> label lbl
     let checkBox  lbl = Inputs.checkBox false |> label lbl
-    let test (form : Form) =
+    let test (node : Node) =
       let t = 
         formlet {
-          let! f = input    "Hello"
-          let! s = input    "There"
-          let! t = checkBox "Check me!"
-          return f, s, t
-        }
-      View.attachTo t form
+          let! _1 = input    "Hello"
+          let! _2 = checkBox "Check me!"
+          let! _3 = input    "There"
+(*
+          let! _3 = 
+            if _2 then
+              input "There"
+            else
+              Formlet.value ""
+              *)
+          let! _4 = input    "Other"
+          return _1, _2, _3, _4
+        } |> Adorn.withElement Form ""
+      View.attachTo t node
