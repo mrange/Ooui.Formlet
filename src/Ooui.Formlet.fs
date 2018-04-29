@@ -37,6 +37,18 @@ module Formlets =
 
     let inline finvoke (t : OptimizedClosures.FSharpFunc<_, _, _, _, _>) fc fcn ffc ft = t.Invoke (fc, fcn, ffc, ft)
 
+    let rec findElement (ft : FormletTree) =
+      match ft with
+      | FormletTree.Element (:? Element as e)     -> Some e
+      | FormletTree.Adorner (:? Element as e, _)  -> Some e
+      | FormletTree.Empty                         -> None
+      | FormletTree.Element e                     -> None
+      | FormletTree.Adorner (_, sft)              -> findElement sft
+      | FormletTree.Fork (lft, rft)               ->
+        match findElement lft with
+        | None  -> findElement rft
+        | r     -> r
+
   open Details
 
   module Formlet =
@@ -106,6 +118,60 @@ module Formlets =
     static member inline (<&>) (l, r)   = Formlet.andAlso l r
 *)
 
+  module Adorn =
+    let withDiv (t : Formlet<'T>) : Formlet<'T> =
+      let tf = fadapt t
+      FL <| fun fc fcn ffc ft ->
+          
+        let e, ft =
+          match ft with
+          | FormletTree.Adorner ((:? Div as e), sft) ->
+            e, sft
+          | _ ->
+            let e = Div ()
+            e, FormletTree.Empty
+
+        let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+
+        FR (tv, tfft, FormletTree.Adorner (e, tft))
+
+  module Enhance =
+
+    let withClass ``class`` (t : Formlet<'T>) : Formlet<'T> =
+      let tf = fadapt t
+      FL <| fun fc fcn ffc ft ->
+
+        let tfr = finvoke tf fc fcn ffc ft          
+        let (FR (tv, tfft, tft)) = tfr
+
+        match findElement tft with
+        | Some element  -> element.ClassName <- ``class``
+        | None          -> ()
+
+        tfr
+
+    let withLabel label (t : Formlet<'T>) : Formlet<'T> =
+      let tf = fadapt t
+      FL <| fun fc fcn ffc ft ->
+          
+        let e, ft =
+          match ft with
+          | FormletTree.Fork (FormletTree.Element (:? Label as e), sft) ->
+            e, sft
+          | _ ->
+            let e = Label label
+            e.Style.Width <- "100px"
+            e, FormletTree.Empty
+
+        let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+        
+        match findElement tft with
+        | Some element  -> e.For <- element.Id
+        | None          -> ()
+
+        FR (tv, tfft, FormletTree.Fork (FormletTree.Element e, tft))
+
+
   module Inputs =
     let text initial : Formlet<string> = 
       FL <| fun fc fcn ffc ft ->
@@ -136,7 +202,7 @@ module Formlets =
         FR (e.IsChecked, FormletFailureTree.Empty, FormletTree.Element e)
 
   module View =
-    let attachTo (t : Formlet<'T>) (div : Div) : unit =
+    let attachTo (t : Formlet<'T>) (form : Form) : unit =
       let rec buildTree (children : ResizeArray<Node>) (ft : FormletTree) =
         match ft with
         | FormletTree.Empty -> 
@@ -145,6 +211,7 @@ module Formlets =
           children.Add e
         | FormletTree.Adorner (e, ft) ->
           buildSubTree e ft
+          children.Add e
         | FormletTree.Fork (lft, rft) -> 
           buildTree children lft
           buildTree children rft
@@ -166,18 +233,21 @@ module Formlets =
         printfn "Formlet Tree(After): %A" tft
         printfn "Value: %A" tv
         printfn "Failure Tree: %A" tfft
-        buildSubTree div tft
+        buildSubTree form tft
         ft <- tft
 
       update ()
 
   module Test =
-    let test (div : Div) =
+    let label   lbl t = t |> Enhance.withLabel lbl |> Adorn.withDiv
+    let input     lbl = Inputs.text ""        |> label lbl
+    let checkBox  lbl = Inputs.checkBox false |> label lbl
+    let test (form : Form) =
       let t = 
         formlet {
-          let! f = Inputs.text "hello"
-          let! s = Inputs.text "there"
-          let! t = Inputs.checkBox false
+          let! f = input    "Hello"
+          let! s = input    "There"
+          let! t = checkBox "Check me!"
           return f, s, t
         }
-      View.attachTo t div
+      View.attachTo t form

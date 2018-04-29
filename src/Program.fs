@@ -29,13 +29,13 @@ let main argv =
   
   UI.Port <- 8800
 
-  let div = Div ()
+  let form = Form ()
 
-  let fr = Test.test div
+  let fr = Test.test form
 
   printfn "%A" fr
   
-  UI.Publish ("/shared-button", div)
+  UI.Publish ("/formlet", form)
 
   Console.ReadLine () |> ignore
 
