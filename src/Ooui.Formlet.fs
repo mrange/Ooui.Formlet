@@ -325,27 +325,58 @@ module Formlets =
       {
         FirstName     : string
         LastName      : string
-        CompanyOwner  : bool
-        CompanyNo     : string
+        SocialNo      : string
       }
-      static member New fn ln co cno : Customer = 
+      static member New fn ln sno : Customer = 
         {
           FirstName     = fn
           LastName      = ln
-          CompanyOwner  = co
+          SocialNo      = sno
+        }
+
+    type Company =
+      {
+        CompanyName   : string
+        CompanyNo     : string
+      }
+      static member New cn cno : Company = 
+        {
+          CompanyName   = cn
           CompanyNo     = cno
         }
+
+    type Entity =
+      | Customer  of Customer
+      | Company   of Company
+
     let label   lbl t = t |> Enhance.withLabel lbl |> Surround.withElement Div "form-group"
     let input     lbl = Inputs.text lbl ""    |> Formlet.validateNonEmpty |> label lbl
     let checkBox  lbl = Inputs.checkBox false |> label lbl
     let test (node : Node) =
-      let t =
+      let customer =
         Formlet.value Customer.New
         <*> input     "First name"
         <*> input     "Last name"
-        <*> checkBox  "Is company owner"
-        <*> input     "Company No"
+        <*> input     "Social no"
+        |>> Customer
         |> Enhance.withGroupBox "Customer"
         
+      let company =
+        Formlet.value Company.New
+        <*> input     "Company name"
+        <*> input     "Company no"
+        |>> Company
+        |> Enhance.withGroupBox "Company"
+ 
+      let t =
+        formlet {
+          let! isCompany  = checkBox "Is company?"
+          let! entity     =
+            if isCompany then
+              company
+            else
+              customer
+          return entity
+        }
 
       View.attachTo (t |> Surround.withElement Form "")  node
