@@ -118,7 +118,10 @@ module Formlets =
     static member inline (<&>) (l, r)   = Formlet.andAlso l r
 *)
 
-  module Adorn =
+  // TODO: Reinitialize controls as needed
+
+  module Surround =
+
     let withElement (creator : unit -> #Element) ``class`` (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
@@ -129,9 +132,8 @@ module Formlets =
             e, sft
           | _ ->
             let e = creator ()
+            e.ClassName <- ``class`` 
             e, FormletTree.Empty
-
-        e.ClassName <- ``class`` 
 
         let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
 
@@ -168,48 +170,53 @@ module Formlets =
         e.Text <- label
 
         let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
-        
+
         match findElement tft with
-        | Some element  -> e.For <- element.Id
+        | Some element  -> e.For <- element
         | None          -> ()
 
         FR (tv, tfft, FormletTree.Fork (FormletTree.Element e, tft))
 
-
   module Inputs =
 
-    let text placeholder initial : Formlet<string> = 
+    type [<Struct>] Input<'T> =
+      {
+        Type        : InputType
+        Initializer : Input -> unit
+        ValueGetter : Input -> 'T
+      }
+
+    let input (input : Input<'T>) : Formlet<'T> = 
       FL <| fun fc fcn ffc ft ->
         let e =
           match ft with
-          | FormletTree.Element (:? Input as e) when e.Type = InputType.Text ->
+          | FormletTree.Element (:? Input as e) when e.Type = input.Type ->
             e
           | _ ->
-            let e = Input InputType.Text
+            let e = Input input.Type
             let (FCN fcn) = fcn
             e.Change.Add (fun _ -> fcn ())
-            e.Value <- initial
+            input.Initializer e
             e
 
-        e.Placeholder <- placeholder
-        e.ClassName   <- "form-control"
+        FR (input.ValueGetter e, FormletFailureTree.Empty, FormletTree.Element e)
 
-        FR (e.Value, FormletFailureTree.Empty, FormletTree.Element e)
+    let text placeholder initial : Formlet<string> = 
+      {
+        Type        = InputType.Text
+        Initializer = fun input -> 
+          input.ClassName   <- "form-control"
+          input.Placeholder <- placeholder
+          input.Value       <- initial
+        ValueGetter = fun input -> input.Value
+      } |> input
 
     let checkBox initial : Formlet<bool> = 
-      FL <| fun fc fcn ffc ft ->
-        let e =
-          match ft with
-          | FormletTree.Element (:? Input as e) when e.Type = InputType.Checkbox ->
-            e
-          | _ ->
-            let e = Input InputType.Checkbox
-            let (FCN fcn) = fcn
-            e.Change.Add (fun _ -> fcn ())
-            e.IsChecked <- initial
-            e
-
-        FR (e.IsChecked, FormletFailureTree.Empty, FormletTree.Element e)
+      {
+        Type        = InputType.Checkbox
+        Initializer = fun input -> input.IsChecked <- initial
+        ValueGetter = fun input -> input.IsChecked
+      } |> input
 
   module View =
     let attachTo (t : Formlet<'T>) (node : Node) : unit =
@@ -245,11 +252,10 @@ module Formlets =
         printfn "Failure Tree: %A" tfft
         buildSubTree node tft
         ft <- tft
-
       update ()
 
   module Test =
-    let label   lbl t = t |> Enhance.withLabel lbl |> Adorn.withElement Div "form-group"
+    let label   lbl t = t |> Enhance.withLabel lbl |> Surround.withElement Div "form-group"
     let input     lbl = Inputs.text lbl ""    |> label lbl
     let checkBox  lbl = Inputs.checkBox false |> label lbl
     let test (node : Node) =
@@ -265,5 +271,5 @@ module Formlets =
               Formlet.value ""
           let! _4 = input    "Other"
           return _1, _2, _3, _4
-        } |> Adorn.withElement Form ""
+        } |> Surround.withElement Form ""
       View.attachTo t node
