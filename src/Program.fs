@@ -49,46 +49,74 @@ open Ooui.Formlets
     type Entity =
       | Customer  of Customer
       | Company   of Company
+    
 
-    let label   lbl t = t |> Enhance.withLabel lbl |> Surround.withElement Div "form-group"
-    let input     lbl = Inputs.text lbl ""    |> Formlet.validateNonEmpty |> label lbl
-    let checkBox  lbl = Inputs.checkBox false |> label lbl
+    type Registration =
+      {
+        Entity          : Entity
+        InvoiceAddress  : Address
+        DeliveryAddress : Address option
+      }
+      static member New e ia da : Registration =
+        {
+          Entity          = e
+          InvoiceAddress  = ia
+          DeliveryAddress = da
+        }
+
+    let label     w lbl t   = t |> Enhance.withLabel lbl |> Surround.withElement Div (sprintf "form-group col-md-%d" w)
+    let input     v w lbl   = Inputs.text lbl ""    |> v |> label w lbl
+    let nonEmpty  w lbl     = input Formlet.validateNonEmpty w lbl
+    let any       w lbl     = input id w lbl
+    let checkBox  lbl       = Inputs.checkBox false |> label 12 lbl
+    let group     lbl t     = t |> Formlet.tag lbl |> Enhance.withGroupBox lbl
     let test (node : Node) =
-      let address =
+      let address lbl =
         Formlet.value Address.New
-        <*> input     "C/O"
-        <*> input     "Address"
-        <*> input     "Zip"
-        <*> input     "City"
-        <*> input     "County"
-        <*> input     "Country"
-        |> Enhance.withGroupBox "Address"
+        <*> any       12  "C/O"
+        <*> nonEmpty  12  "Address"
+        <*> nonEmpty  6   "Zip"
+        <*> nonEmpty  6   "City"
+        <*> any       6   "County"
+        <*> any       6   "Country"
+        |> group lbl
 
       let customer =
         Formlet.value Customer.New
-        <*> input     "First name"
-        <*> input     "Last name"
-        <*> input     "Social no"
+        <*> nonEmpty  6   "First name"
+        <*> nonEmpty  6   "Last name"
+        <*> nonEmpty  12  "Social no"
         |>> Customer
-        |> Enhance.withGroupBox "Customer"
+        |> group "Customer"
         
       let company =
         Formlet.value Company.New
-        <*> input     "Company name"
-        <*> input     "Company no"
+        <*> nonEmpty  12  "Company name"
+        <*> nonEmpty  12  "Company no"
         |>> Company
-        |> Enhance.withGroupBox "Company"
+        |> group "Company"
  
       let entity =
         formlet {
           let! isCompany  = checkBox "Is company?"
+
           let! entity     =
             if isCompany then
               company
             else
               customer
-          let! address    = address
-          return entity, address
+
+          let! invoiceAddress = address "Invoice Address"
+
+          let! useSeparateDeliveryAddress = checkBox "Separate delivery address?"
+
+          let! deliveryAddress = 
+            if useSeparateDeliveryAddress then
+              address "Delivery Address" |>> Some
+            else
+              Formlet.value None
+
+          return Registration.New entity invoiceAddress deliveryAddress
         }
 
       let form = 

@@ -23,6 +23,8 @@ module Formlets =
     | NestedElement of FormletElement*FormletElement*FormletTree
     | Prepend       of FormletElement*FormletTree
     | Append        of FormletTree*FormletElement
+    | Debug         of string*FormletTree
+    | Tag           of string*FormletTree
     | Fork          of FormletTree*FormletTree
 
   type [<Struct>] FormletFailureContext = 
@@ -75,7 +77,9 @@ module Formlets =
       | FormletTree.Element       _                       -> Nothing
       | FormletTree.NestedElement (_, _, sft)             
       | FormletTree.Prepend       (_, sft)                
-      | FormletTree.Append        (sft, _)                -> findElement sft  // TODO: Consider right tree
+      | FormletTree.Append        (sft, _)                
+      | FormletTree.Debug         (_, sft)                
+      | FormletTree.Tag           (_, sft)                -> findElement sft
       | FormletTree.Fork          (lft, rft)              ->
         match findElement lft with
         | Nothing -> findElement rft
@@ -136,6 +140,32 @@ module Formlets =
         let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
 
         FR (m tv, tfft, tft)
+
+    let debug nm (t : Formlet<'T>) : Formlet<'T> = 
+      let tf = fadapt t
+      FL <| fun fc fcn ffc ft ->
+
+        let ft =
+          match ft with
+          | FormletTree.Debug (_, sft)    -> sft
+          | _                             -> ft
+
+        let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+
+        FR (tv, tfft, FormletTree.Debug (nm, tft))
+
+    let tag nm (t : Formlet<'T>) : Formlet<'T> = 
+      let tf = fadapt t
+      FL <| fun fc fcn ffc ft ->
+
+        let ft =
+          match ft with
+          | FormletTree.Tag (snm, sft) when snm = nm  -> sft
+          | _                                         -> FormletTree.Empty
+
+        let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+
+        FR (tv, tfft, FormletTree.Tag (nm, tft))
 
     let validate (validator : 'T -> string maybe) (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
@@ -227,7 +257,7 @@ module Formlets =
         member x.Initialize () =
           if x.Children.Count = 0 then
             header.Initialize ()
-            x.ClassName <- "panel-group"
+            //x.ClassName <- "panel-group"
             x.AppendChild header  |> ignore
             x.AppendChild content |> ignore
 
@@ -391,6 +421,10 @@ module Formlets =
         | FormletTree.Append (ft, e) ->
           buildTree children ft
           children.Add e
+        | FormletTree.Debug (_, ft) ->
+          buildTree children ft
+        | FormletTree.Tag (_, ft) ->
+          buildTree children ft
         | FormletTree.Fork (lft, rft) -> 
           buildTree children lft
           buildTree children rft
