@@ -3,6 +3,25 @@ open Ooui
 
 open Ooui.Formlets
   module Test =
+    type Address =
+      {
+        CarryOver     : string
+        Address       : string
+        Zip           : string
+        City          : string
+        County        : string
+        Country       : string
+      }
+      static member New co address zip city county country : Address = 
+        {
+          CarryOver     = co
+          Address       = address
+          Zip           = zip
+          City          = city
+          County        = county
+          Country       = country
+        }
+
     type Customer =
       {
         FirstName     : string
@@ -35,6 +54,16 @@ open Ooui.Formlets
     let input     lbl = Inputs.text lbl ""    |> Formlet.validateNonEmpty |> label lbl
     let checkBox  lbl = Inputs.checkBox false |> label lbl
     let test (node : Node) =
+      let address =
+        Formlet.value Address.New
+        <*> input     "C/O"
+        <*> input     "Address"
+        <*> input     "Zip"
+        <*> input     "City"
+        <*> input     "County"
+        <*> input     "Country"
+        |> Enhance.withGroupBox "Address"
+
       let customer =
         Formlet.value Customer.New
         <*> input     "First name"
@@ -58,10 +87,16 @@ open Ooui.Formlets
               company
             else
               customer
-          return entity
+          let! address    = address
+          return entity, address
         }
 
-      View.attachTo (entity |> Surround.withElement Form "")  node
+      let form = 
+        entity 
+        |> Enhance.withSubmit
+        |> Surround.withElement Form ""
+
+      View.attachTo form node
 [<EntryPoint>]
 let main argv =
   
