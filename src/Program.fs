@@ -12,7 +12,7 @@ open Ooui.Formlets
         County        : string
         Country       : string
       }
-      static member New co address zip city county country : Address = 
+      static member New co address zip city county country : Address =
         {
           CarryOver     = co
           Address       = address
@@ -28,7 +28,7 @@ open Ooui.Formlets
         LastName      : string
         SocialNo      : string
       }
-      static member New fn ln sno : Customer = 
+      static member New fn ln sno : Customer =
         {
           FirstName     = fn
           LastName      = ln
@@ -40,7 +40,7 @@ open Ooui.Formlets
         CompanyName   : string
         CompanyNo     : string
       }
-      static member New cn cno : Company = 
+      static member New cn cno : Company =
         {
           CompanyName   = cn
           CompanyNo     = cno
@@ -49,7 +49,7 @@ open Ooui.Formlets
     type Entity =
       | Customer  of Customer
       | Company   of Company
-    
+
 
     type Registration =
       {
@@ -88,14 +88,14 @@ open Ooui.Formlets
         <*> nonEmpty  12  "Social no"
         |>> Customer
         |> group "Customer"
-        
+
       let company =
         Formlet.value Company.New
         <*> nonEmpty  12  "Company name"
         <*> nonEmpty  12  "Company no"
         |>> Company
         |> group "Company"
- 
+
       let entity =
         formlet {
           let! isCompany  = checkBox "Is company?"
@@ -110,7 +110,7 @@ open Ooui.Formlets
 
           let! useSeparateDeliveryAddress = checkBox "Separate delivery address?"
 
-          let! deliveryAddress = 
+          let! deliveryAddress =
             if useSeparateDeliveryAddress then
               address "Delivery Address" |>> Some
             else
@@ -119,15 +119,15 @@ open Ooui.Formlets
           return Registration.New entity invoiceAddress deliveryAddress
         }
 
-      let form = 
-        entity 
+      let form =
+        entity
         |> Enhance.withSubmit
         |> Surround.withElement Form ""
 
       View.attachTo form node
 [<EntryPoint>]
 let main argv =
-  
+
   UI.Port <- 8800
 
   let div = Div ()
@@ -136,7 +136,7 @@ let main argv =
   let fr = Test.test div
 
   printfn "%A" fr
-  
+
   UI.Publish ("/formlet", div)
 
   Console.ReadLine () |> ignore

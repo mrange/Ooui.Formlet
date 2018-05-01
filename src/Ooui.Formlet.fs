@@ -17,7 +17,7 @@ module Formlets =
 
   type FormletElement = Ooui.Node
 
-  type [<RequireQualifiedAccess>] FormletTree = 
+  type [<RequireQualifiedAccess>] FormletTree =
     | Empty
     | Element       of FormletElement
     | NestedElement of FormletElement*FormletElement*FormletTree
@@ -27,7 +27,7 @@ module Formlets =
     | Tag           of string*FormletTree
     | Fork          of FormletTree*FormletTree
 
-  type [<Struct>] FormletFailureContext = 
+  type [<Struct>] FormletFailureContext =
     | FFC of (string list)
 
     with
@@ -35,13 +35,13 @@ module Formlets =
         let (FFC names) = x
         FFC (name::names)
 
-  type [<RequireQualifiedAccess>] FormletFailureTree = 
+  type [<RequireQualifiedAccess>] FormletFailureTree =
     | Empty
     | Failure of FormletFailureContext*string
     | Fork    of FormletFailureTree*FormletFailureTree
 
     static member Join l r : FormletFailureTree =
-      match l, r with 
+      match l, r with
       | Empty , Empty -> Empty
       | _     , Empty -> l
       | Empty , _     -> r
@@ -60,7 +60,7 @@ module Formlets =
       ra.ToArray ()
   type [<Struct>] FormletResult<'T> = FR of 'T*FormletFailureTree*FormletTree
 
-  type [<Struct>] Formlet<'T> = 
+  type [<Struct>] Formlet<'T> =
     | FL of (FormletContext -> FormletChangeNotification -> FormletFailureContext -> FormletTree -> FormletResult<'T>)
 
   module Details =
@@ -70,15 +70,15 @@ module Formlets =
 
     let rec findElement (ft : FormletTree) =
       match ft with
-      | FormletTree.Element       (:? Element as e)      
+      | FormletTree.Element       (:? Element as e)
       | FormletTree.NestedElement (:? Element as e, _, _)
       | FormletTree.Prepend       (:? Element as e, _)    -> Just e
-      | FormletTree.Empty                                 
+      | FormletTree.Empty
       | FormletTree.Element       _                       -> Nothing
-      | FormletTree.NestedElement (_, _, sft)             
-      | FormletTree.Prepend       (_, sft)                
-      | FormletTree.Append        (sft, _)                
-      | FormletTree.Debug         (_, sft)                
+      | FormletTree.NestedElement (_, _, sft)
+      | FormletTree.Prepend       (_, sft)
+      | FormletTree.Append        (sft, _)
+      | FormletTree.Debug         (_, sft)
       | FormletTree.Tag           (_, sft)                -> findElement sft
       | FormletTree.Fork          (lft, rft)              ->
         match findElement lft with
@@ -118,7 +118,7 @@ module Formlets =
 
         FR (uv, FormletFailureTree.Join tfft ufft, FormletTree.Fork (tft, uft))
 
-    let apply (f: Formlet<'T -> 'U>) (t : Formlet<'T>) : Formlet<'U> = 
+    let apply (f: Formlet<'T -> 'U>) (t : Formlet<'T>) : Formlet<'U> =
       let ff = fadapt f
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
@@ -133,7 +133,7 @@ module Formlets =
 
         FR (ff tv, FormletFailureTree.Join ffft tfft, FormletTree.Fork (fft, tft))
 
-    let map m (t : Formlet<'T>) : Formlet<'U> = 
+    let map m (t : Formlet<'T>) : Formlet<'U> =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
 
@@ -141,7 +141,7 @@ module Formlets =
 
         FR (m tv, tfft, tft)
 
-    let debug nm (t : Formlet<'T>) : Formlet<'T> = 
+    let debug nm (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
 
@@ -154,7 +154,7 @@ module Formlets =
 
         FR (tv, tfft, FormletTree.Debug (nm, tft))
 
-    let tag nm (t : Formlet<'T>) : Formlet<'T> = 
+    let tag nm (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
 
@@ -175,9 +175,9 @@ module Formlets =
         let (FR (tv, tfft, tft)) = tfr
 
         match validator tv with
-        | Just failure  -> 
+        | Just failure  ->
           FR (tv, FormletFailureTree.Join tfft (FormletFailureTree.Failure (ffc, failure)), tft)
-        | Nothing       -> 
+        | Nothing       ->
           tfr
 
     let validateNonEmpty (t : Formlet<string>) : Formlet<string> =
@@ -196,7 +196,7 @@ module Formlets =
 
   let formlet = Formlet.Builder ()
 
-  type Formlet<'T> with 
+  type Formlet<'T> with
     static member inline (>>=) (t, uf)  = Formlet.bind    t uf
     static member inline (|>>) (t, m)   = Formlet.map     m t
     static member inline (<*>) (f, t)   = Formlet.apply   f t
@@ -210,7 +210,7 @@ module Formlets =
     let withElement (creator : unit -> #Element) ``class`` (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
-          
+
         let e, ft =
           match ft with
           | FormletTree.NestedElement (:? #Element as e, _, sft) ->
@@ -219,7 +219,7 @@ module Formlets =
             let e = creator ()
             e, FormletTree.Empty
 
-        e.ClassName <- ``class`` 
+        e.ClassName <- ``class``
 
         let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
 
@@ -243,7 +243,7 @@ module Formlets =
             x.AppendChild content         |> ignore
             title.AppendChild titleText   |> ignore
 
-        member x.Title 
+        member x.Title
           with  get () = titleText.Text
           and   set v  = titleText.Text <- v
         member x.Content  = content
@@ -270,7 +270,7 @@ module Formlets =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
 
-        let tfr = finvoke tf fc fcn ffc ft          
+        let tfr = finvoke tf fc fcn ffc ft
         let (FR (tv, tfft, tft)) = tfr
 
         match findElement tft with
@@ -282,7 +282,7 @@ module Formlets =
     let withLabel label (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
-          
+
         let e, ft =
           match ft with
           | FormletTree.Prepend (:? Label as e, sft) ->
@@ -304,7 +304,7 @@ module Formlets =
     let withGroupBox label (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
-          
+
         let e, ft =
           match ft with
           | FormletTree.NestedElement (:? GroupBox as e, _, sft) ->
@@ -323,7 +323,7 @@ module Formlets =
     let withSubmit (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
-          
+
         let e, ft =
           match ft with
           | FormletTree.NestedElement (:? Submit as e, _, sft) ->
@@ -340,7 +340,7 @@ module Formlets =
         | _ ->
           e.SetLocalAttribute ("FormletFailureTree", box tfft)
           match tfft with
-          | FormletFailureTree.Empty -> 
+          | FormletFailureTree.Empty ->
             e.Header.ClassName  <- "panel panel-success"
             e.Header.Title      <- "Ready to submit!"
             e.Header.Content.ReplaceChildren([|TextNode "All is good!"|])
@@ -367,7 +367,7 @@ module Formlets =
         Update      : Input -> 'T
       }
 
-    let input (input : Input<'T>) : Formlet<'T> = 
+    let input (input : Input<'T>) : Formlet<'T> =
       FL <| fun fc fcn ffc ft ->
         let e =
           match ft with
@@ -384,23 +384,23 @@ module Formlets =
 
         FR (v, FormletFailureTree.Empty, FormletTree.Element e)
 
-    let text placeholder initial : Formlet<string> = 
+    let text placeholder initial : Formlet<string> =
       {
         Type   = InputType.Text
-        Init   = fun input -> 
+        Init   = fun input ->
           input.ClassName   <- "form-control"
           input.Value       <- initial
-        Update = fun input -> 
+        Update = fun input ->
           input.Placeholder <- placeholder
           input.Value
       } |> input
 
-    let checkBox initial : Formlet<bool> = 
+    let checkBox initial : Formlet<bool> =
       {
         Type    = InputType.Checkbox
-        Init    = fun input -> 
+        Init    = fun input ->
           input.IsChecked <- initial
-        Update  = fun input -> 
+        Update  = fun input ->
           input.IsChecked
       } |> input
 
@@ -408,9 +408,9 @@ module Formlets =
     let attachTo (t : Formlet<'T>) (node : Node) : unit =
       let rec buildTree (children : ResizeArray<Node>) (ft : FormletTree) =
         match ft with
-        | FormletTree.Empty -> 
+        | FormletTree.Empty ->
           ()
-        | FormletTree.Element e -> 
+        | FormletTree.Element e ->
           children.Add e
         | FormletTree.NestedElement (e, se, ft) ->
           children.Add e
@@ -425,18 +425,18 @@ module Formlets =
           buildTree children ft
         | FormletTree.Tag (_, ft) ->
           buildTree children ft
-        | FormletTree.Fork (lft, rft) -> 
+        | FormletTree.Fork (lft, rft) ->
           buildTree children lft
           buildTree children rft
       and buildSubTree (node : Node) (ft : FormletTree) =
         let nestedChildren = ResizeArray node.Children.Count
         buildTree nestedChildren ft
-        node.ReplaceChildren nestedChildren 
+        node.ReplaceChildren nestedChildren
       let mutable ft = FormletTree.Empty
       let fc = FC ()
       let ffc = FFC []
       let tf = fadapt t
-      let rec fcn = FCN (fun () -> 
+      let rec fcn = FCN (fun () ->
           printfn "Change request"
           update ()
         )
