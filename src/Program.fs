@@ -68,9 +68,9 @@ open Ooui.Formlets
     let regexSocialNo       = Regex ("\d{8}-\d{4}", RegexOptions.CultureInvariant ||| RegexOptions.Compiled ||| RegexOptions.Singleline)
 
     let row       t         = t |> Surround.withElement Div "form-row"
-    let label     lbl t     = 
-      t 
-      |> Enhance.withLabel lbl 
+    let label     lbl t     =
+      t
+      |> Enhance.withLabel lbl
       |> row
     let input     v lbl     = Inputs.text lbl "" |> v |> Enhance.withValidation |> label lbl
     let notEmpty  lbl       = input Validate.notEmpty lbl

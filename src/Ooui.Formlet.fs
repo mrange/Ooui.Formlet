@@ -308,7 +308,7 @@ module Formlets =
       let tf = fadapt t
       FL <| fun fc fcn ffc ft ->
 
-        let ft, v = 
+        let ft, v =
           match ft with
           | FormletTree.Append (FormletTree.Element (:? Input) as ft, v) -> ft, v
           | _ -> FormletTree.Empty, null
@@ -318,7 +318,7 @@ module Formlets =
 
         let ntft =
           match tft with
-          | FormletTree.Element (:? Input as element)  -> 
+          | FormletTree.Element (:? Input as element)  ->
             let hasError = match tfft with FormletFailureTree.Empty -> false | _ -> true
             let className = element.ClassName
             let classes = className.Split ' '
@@ -336,12 +336,12 @@ module Formlets =
               append "is-invalid"
             else
               append "is-valid"
-              
+
             element.ClassName <- sb.ToString ()
 
             let vv =
               if hasError then
-                let div = 
+                let div =
                   match v with
                   | :? Div as div -> div
                   | _ -> Div ()
