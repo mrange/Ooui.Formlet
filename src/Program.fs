@@ -1,5 +1,6 @@
 ﻿open System
 open Ooui
+open System.Text.RegularExpressions
 
 open Ooui.Formlets
   module Test =
@@ -64,35 +65,42 @@ open Ooui.Formlets
           DeliveryAddress = da
         }
 
-    let label     w lbl t   = t |> Enhance.withLabel lbl |> Surround.withElement Div (sprintf "form-group col-md-%d" w)
-    let input     v w lbl   = Inputs.text lbl ""    |> v |> label w lbl
-    let nonEmpty  w lbl     = input Formlet.validateNonEmpty w lbl
-    let any       w lbl     = input id w lbl
-    let checkBox  lbl       = Inputs.checkBox false |> label 12 lbl
+    let regexSocialNo       = Regex ("\d{8}-\d{4}", RegexOptions.CultureInvariant ||| RegexOptions.Compiled ||| RegexOptions.Singleline)
+
+    let row       t         = t |> Surround.withElement Div "form-row"
+    let label     lbl t     = 
+      t 
+      |> Enhance.withLabel lbl 
+      |> row
+    let input     v lbl     = Inputs.text lbl "" |> v |> Enhance.withValidation |> label lbl
+    let notEmpty  lbl       = input Validate.notEmpty lbl
+    let socialNo  lbl       = input (Validate.notEmpty >> Validate.regex regexSocialNo "Social no should look like this: 19601201-1234") lbl
+    let any       lbl       = input id lbl
+    let checkBox  lbl       = Inputs.checkBox false |> label lbl
     let group     lbl t     = t |> Formlet.tag lbl |> Enhance.withGroupBox lbl
     let test (node : Node) =
       let address lbl =
         Formlet.value Address.New
-        <*> any       12  "C/O"
-        <*> nonEmpty  12  "Address"
-        <*> nonEmpty  6   "Zip"
-        <*> nonEmpty  6   "City"
-        <*> any       6   "County"
-        <*> any       6   "Country"
+        <*> any       "C/O"
+        <*> notEmpty  "Address"
+        <*> notEmpty  "Zip"
+        <*> notEmpty  "City"
+        <*> any       "County"
+        <*> any       "Country"
         |> group lbl
 
       let customer =
         Formlet.value Customer.New
-        <*> nonEmpty  6   "First name"
-        <*> nonEmpty  6   "Last name"
-        <*> nonEmpty  12  "Social no"
+        <*> notEmpty  "First name"
+        <*> notEmpty  "Last name"
+        <*> socialNo  "Social no"
         |>> Customer
         |> group "Customer"
 
       let company =
         Formlet.value Company.New
-        <*> nonEmpty  12  "Company name"
-        <*> nonEmpty  12  "Company no"
+        <*> notEmpty  "Company name"
+        <*> notEmpty  "Company no"
         |>> Company
         |> group "Company"
 
@@ -137,6 +145,7 @@ let main argv =
 
   printfn "%A" fr
 
+  UI.HeadHtml <- """<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" />""";
   UI.Publish ("/formlet", div)
 
   Console.ReadLine () |> ignore

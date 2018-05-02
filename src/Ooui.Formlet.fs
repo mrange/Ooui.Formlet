@@ -2,6 +2,8 @@
 
 module Formlets =
 
+  open System.Text.RegularExpressions
+
   type [<Struct>] Maybe<'T> =
     | Just      of 'T
     | Nothing
@@ -47,17 +49,29 @@ module Formlets =
       | Empty , _     -> r
       | _     , _     -> Fork (l, r)
 
-    member x.Flatten () : (string*string) [] =
+    member x.ContextfulFailures () : struct (string*string) [] =
       let ra = ResizeArray 16
+      // TODO: Optimize
       let toContext (FFC vs) =
         System.String.Join ('.', vs |> List.rev |> List.toArray)
       let rec loop t =
         match t with
         | Empty -> ()
-        | Failure (ffc, msg)  -> ra.Add (toContext ffc, msg)
+        | Failure (ffc, msg)  -> ra.Add (struct (toContext ffc, msg))
         | Fork    (l, r)      -> loop l; loop r
       loop x
       ra.ToArray ()
+
+    member x.Failures () : string [] =
+      let ra = ResizeArray 16
+      let rec loop t =
+        match t with
+        | Empty -> ()
+        | Failure (ffc, msg)  -> ra.Add msg
+        | Fork    (l, r)      -> loop l; loop r
+      loop x
+      ra.ToArray ()
+
   type [<Struct>] FormletResult<'T> = FR of 'T*FormletFailureTree*FormletTree
 
   type [<Struct>] Formlet<'T> =
@@ -167,27 +181,6 @@ module Formlets =
 
         FR (tv, tfft, FormletTree.Tag (nm, tft))
 
-    let validate (validator : 'T -> string maybe) (t : Formlet<'T>) : Formlet<'T> =
-      let tf = fadapt t
-      FL <| fun fc fcn ffc ft ->
-
-        let tfr = finvoke tf fc fcn ffc ft
-        let (FR (tv, tfft, tft)) = tfr
-
-        match validator tv with
-        | Just failure  ->
-          FR (tv, FormletFailureTree.Join tfft (FormletFailureTree.Failure (ffc, failure)), tft)
-        | Nothing       ->
-          tfr
-
-    let validateNonEmpty (t : Formlet<string>) : Formlet<string> =
-      let validator (v : string) =
-        if v.Length > 0 then
-          Nothing
-        else
-          Just "Input must not be empty"
-      validate validator t
-
     type Builder () =
       member inline x.Bind       (t, uf)   = bind t uf
       member inline x.Return     v         = value v
@@ -205,6 +198,36 @@ module Formlets =
     static member inline (<&>) (l, r)   = Formlet.andAlso l r
 *)
 
+  module Validate =
+    let validate (validator : 'T -> string maybe) (t : Formlet<'T>) : Formlet<'T> =
+      let tf = fadapt t
+      FL <| fun fc fcn ffc ft ->
+
+        let tfr = finvoke tf fc fcn ffc ft
+        let (FR (tv, tfft, tft)) = tfr
+
+        match validator tv with
+        | Just failure  ->
+          FR (tv, FormletFailureTree.Join tfft (FormletFailureTree.Failure (ffc, failure)), tft)
+        | Nothing       ->
+          tfr
+
+    let notEmpty (t : Formlet<string>) : Formlet<string> =
+      let validator (v : string) =
+        if v.Length > 0 then
+          Nothing
+        else
+          Just "Must not be empty"
+      validate validator t
+
+    let regex (test : Regex) failWith (t : Formlet<string>) : Formlet<string> =
+      let validator (v : string) =
+        if test.IsMatch v then
+          Nothing
+        else
+          Just failWith
+      validate validator t
+
   module Surround =
 
     let withElement (creator : unit -> #Element) ``class`` (t : Formlet<'T>) : Formlet<'T> =
@@ -219,7 +242,8 @@ module Formlets =
             let e = creator ()
             e, FormletTree.Empty
 
-        e.ClassName <- ``class``
+        if System.String.IsNullOrEmpty ``class`` |> not then
+          e.ClassName <- ``class``
 
         let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
 
@@ -236,9 +260,9 @@ module Formlets =
 
         member x.Initialize () =
           if x.Children.Count = 0 then
-            x.ClassName       <- "panel panel-default"
-            title.ClassName   <- "panel-heading"
-            content.ClassName <- "panel-body"
+            x.ClassName       <- "card"
+            title.ClassName   <- "card-header"
+            content.ClassName <- "card-body"
             x.AppendChild title           |> ignore
             x.AppendChild content         |> ignore
             title.AppendChild titleText   |> ignore
@@ -257,12 +281,13 @@ module Formlets =
         member x.Initialize () =
           if x.Children.Count = 0 then
             header.Initialize ()
-            //x.ClassName <- "panel-group"
             x.AppendChild header  |> ignore
             x.AppendChild content |> ignore
 
         member x.Header     = header
         member x.Content    = content
+
+      let regexValidation = Regex ("is-(in)?valid", RegexOptions.CultureInvariant ||| RegexOptions.Compiled ||| RegexOptions.Singleline)
 
     open Details
 
@@ -278,6 +303,74 @@ module Formlets =
         | Nothing       -> ()
 
         tfr
+
+    let withValidation (t : Formlet<'T>) : Formlet<'T> =
+      let tf = fadapt t
+      FL <| fun fc fcn ffc ft ->
+
+        let ft, v = 
+          match ft with
+          | FormletTree.Append (FormletTree.Element (:? Input) as ft, v) -> ft, v
+          | _ -> FormletTree.Empty, null
+
+        let tfr = finvoke tf fc fcn ffc ft
+        let (FR (tv, tfft, tft)) = tfr
+
+        let ntft =
+          match tft with
+          | FormletTree.Element (:? Input as element)  -> 
+            let hasError = match tfft with FormletFailureTree.Empty -> false | _ -> true
+            let className = element.ClassName
+            let classes = className.Split ' '
+            let sb = System.Text.StringBuilder (className.Length + 2) // +2 for handling is-valid -> is-invalid
+            let inline append (v : string) =
+              if sb.Length > 0 then
+                sb.Append ' ' |> ignore
+              sb.Append v |> ignore
+            for ``class`` in classes do
+              if ``class``.Length = 0 then
+                ()
+              elif regexValidation.IsMatch ``class`` |> not then
+                append ``class``
+            if hasError then
+              append "is-invalid"
+            else
+              append "is-valid"
+              
+            element.ClassName <- sb.ToString ()
+
+            let vv =
+              if hasError then
+                let div = 
+                  match v with
+                  | :? Div as div -> div
+                  | _ -> Div ()
+                div.ClassName <- "invalid-feedback"
+
+                let sb = System.Text.StringBuilder 16
+                let inline append (v : string) =
+                  if sb.Length > 0 then
+                    sb.Append "; " |> ignore
+                  sb.Append v |> ignore
+                for msg in tfft.Failures () do
+                  append msg
+
+                let text = sb.ToString ()
+
+                if text.Length > 0 then
+                  div.Text <- text
+                else
+                  div.Text <- "Invalid input."
+
+                div
+              else
+                null
+
+            FormletTree.Append (tft, vv)
+          | _ ->
+            FormletTree.Append (tft, null)
+
+        FR (tv, tfft, ntft)
 
     let withLabel label (t : Formlet<'T>) : Formlet<'T> =
       let tf = fadapt t
@@ -341,15 +434,16 @@ module Formlets =
           e.SetLocalAttribute ("FormletFailureTree", box tfft)
           match tfft with
           | FormletFailureTree.Empty ->
-            e.Header.ClassName  <- "panel panel-success"
+            e.Header.ClassName  <- "card text-white bg-success"
             e.Header.Title      <- "Ready to submit!"
             e.Header.Content.ReplaceChildren([|TextNode "All is good!"|])
           | _ ->
-            e.Header.ClassName  <- "panel panel-danger"
+            e.Header.ClassName  <- "card text-white bg-danger"
             e.Header.Title      <- "Resolve validation error(s)"
             let list = List false
-            let failures = tfft.Flatten ()
-            for ctx, msg in failures do
+            let failures = tfft.ContextfulFailures ()
+            // TODO: Optimize
+            for struct (ctx, msg) in failures do
               let li = ListItem ()
               li.AppendChild (TextNode (sprintf "§ %s: %s" ctx msg)) |> ignore
               list.AppendChild li |> ignore
@@ -360,21 +454,22 @@ module Formlets =
 
   module Inputs =
 
-    type [<Struct>] Input<'T> =
-      {
-        Type        : InputType
-        Init        : Input -> unit
-        Update      : Input -> 'T
-      }
+    type [<AbstractClass>] Input<'T> (inputType: InputType) =
+      class
+        member x.InputType = inputType
+
+        abstract Init   : Input -> unit
+        abstract Update : Input -> 'T
+      end
 
     let input (input : Input<'T>) : Formlet<'T> =
       FL <| fun fc fcn ffc ft ->
         let e =
           match ft with
-          | FormletTree.Element (:? Input as e) when e.Type = input.Type ->
+          | FormletTree.Element (:? Input as e) when e.Type = input.InputType ->
             e
           | _ ->
-            let e = Input input.Type
+            let e = Input input.InputType
             let (FCN fcn) = fcn
             e.Change.Add (fun _ -> fcn ())
             input.Init e
@@ -385,42 +480,43 @@ module Formlets =
         FR (v, FormletFailureTree.Empty, FormletTree.Element e)
 
     let text placeholder initial : Formlet<string> =
-      {
-        Type   = InputType.Text
-        Init   = fun input ->
+      { new Input<_> (InputType.Text) with
+        override x.Init input =
           input.ClassName   <- "form-control"
           input.Value       <- initial
-        Update = fun input ->
+        override x.Update input =
           input.Placeholder <- placeholder
           input.Value
       } |> input
 
     let checkBox initial : Formlet<bool> =
-      {
-        Type    = InputType.Checkbox
-        Init    = fun input ->
+      { new Input<_> (InputType.Checkbox) with
+        override x.Init input =
           input.IsChecked <- initial
-        Update  = fun input ->
+        override x.Update input =
           input.IsChecked
       } |> input
 
   module View =
     let attachTo (t : Formlet<'T>) (node : Node) : unit =
       let rec buildTree (children : ResizeArray<Node>) (ft : FormletTree) =
+        let inline add e =
+          if isNull e |> not then
+            children.Add e
         match ft with
         | FormletTree.Empty ->
           ()
         | FormletTree.Element e ->
-          children.Add e
+          add e
         | FormletTree.NestedElement (e, se, ft) ->
-          children.Add e
+          add e
           buildSubTree se ft
         | FormletTree.Prepend (e, ft) ->
-          children.Add e
+          add e
           buildTree children ft
         | FormletTree.Append (ft, e) ->
           buildTree children ft
-          children.Add e
+          add e
         | FormletTree.Debug (_, ft) ->
           buildTree children ft
         | FormletTree.Tag (_, ft) ->
