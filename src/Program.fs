@@ -2,137 +2,137 @@
 open Ooui
 open System.Text.RegularExpressions
 
-open Ooui.Formlets
-  module Test =
-    type Address =
+open Ooui.Formlets.Core
+open Ooui.Formlets.Bootstrap
+
+module Test =
+  type Address =
+    {
+      CarryOver     : string
+      Address       : string
+      Zip           : string
+      City          : string
+      County        : string
+      Country       : string
+    }
+    static member New co address zip city county country : Address =
       {
-        CarryOver     : string
-        Address       : string
-        Zip           : string
-        City          : string
-        County        : string
-        Country       : string
+        CarryOver     = co
+        Address       = address
+        Zip           = zip
+        City          = city
+        County        = county
+        Country       = country
       }
-      static member New co address zip city county country : Address =
-        {
-          CarryOver     = co
-          Address       = address
-          Zip           = zip
-          City          = city
-          County        = county
-          Country       = country
-        }
 
-    type Customer =
+  type Customer =
+    {
+      FirstName     : string
+      LastName      : string
+      SocialNo      : string
+    }
+    static member New fn ln sno : Customer =
       {
-        FirstName     : string
-        LastName      : string
-        SocialNo      : string
+        FirstName     = fn
+        LastName      = ln
+        SocialNo      = sno
       }
-      static member New fn ln sno : Customer =
-        {
-          FirstName     = fn
-          LastName      = ln
-          SocialNo      = sno
-        }
 
-    type Company =
+  type Company =
+    {
+      CompanyName   : string
+      CompanyNo     : string
+    }
+    static member New cn cno : Company =
       {
-        CompanyName   : string
-        CompanyNo     : string
+        CompanyName   = cn
+        CompanyNo     = cno
       }
-      static member New cn cno : Company =
-        {
-          CompanyName   = cn
-          CompanyNo     = cno
-        }
 
-    type Entity =
-      | Customer  of Customer
-      | Company   of Company
+  type Entity =
+    | Customer  of Customer
+    | Company   of Company
 
 
-    type Registration =
+  type Registration =
+    {
+      Entity          : Entity
+      InvoiceAddress  : Address
+      DeliveryAddress : Address option
+    }
+    static member New e ia da : Registration =
       {
-        Entity          : Entity
-        InvoiceAddress  : Address
-        DeliveryAddress : Address option
+        Entity          = e
+        InvoiceAddress  = ia
+        DeliveryAddress = da
       }
-      static member New e ia da : Registration =
-        {
-          Entity          = e
-          InvoiceAddress  = ia
-          DeliveryAddress = da
-        }
 
-    let regexSocialNo       = Regex ("\d{8}-\d{4}", RegexOptions.CultureInvariant ||| RegexOptions.Compiled ||| RegexOptions.Singleline)
+  let regexSocialNo       = Regex ("\d{8}-\d{4}", RegexOptions.CultureInvariant ||| RegexOptions.Compiled ||| RegexOptions.Singleline)
 
-    let row       t         = t |> Surround.withElement Div "form-row"
-    let label     lbl t     =
-      t
-      |> Enhance.withLabel lbl
-      |> row
-    let input     v lbl     = Inputs.text lbl "" |> v |> Enhance.withValidation |> label lbl
-    let notEmpty  lbl       = input Validate.notEmpty lbl
-    let socialNo  lbl       = input (Validate.notEmpty >> Validate.regex regexSocialNo "Social no should look like this: 19601201-1234") lbl
-    let any       lbl       = input id lbl
-    let checkBox  lbl       = Inputs.checkBox false |> label lbl
-    let group     lbl t     = t |> Formlet.tag lbl |> Enhance.withGroupBox lbl
-    let test (node : Node) =
-      let address lbl =
-        Formlet.value Address.New
-        <*> any       "C/O"
-        <*> notEmpty  "Address"
-        <*> notEmpty  "Zip"
-        <*> notEmpty  "City"
-        <*> any       "County"
-        <*> any       "Country"
-        |> group lbl
+  let row       t         = t |> Surround.withElement Div "form-row"
+  let label     lbl t     =
+    t
+    |> Enhance.withLabel lbl
+    |> row
+  let group     lbl t     = t |> Formlet.tag lbl |> Enhance.withLabeledBox lbl
+  let box           t     = t |> Enhance.withBox
+  let input     v lbl     = Inputs.text lbl "" |> v |> Enhance.withValidation |> label lbl
+  let notEmpty  lbl       = input Validate.notEmpty lbl
+  let socialNo  lbl       = input (Validate.notEmpty >> Validate.regex regexSocialNo "Social no should look like this: 19601201-1234") lbl
+  let any       lbl       = input id lbl
+  let checkBox  lbl       = Inputs.checkBox false |> label lbl |> box
+  let select    lbl vs    = Inputs.select vs |> label lbl |> box |> Formlet.unwrap
 
-      let customer =
-        Formlet.value Customer.New
-        <*> notEmpty  "First name"
-        <*> notEmpty  "Last name"
-        <*> socialNo  "Social no"
-        |>> Customer
-        |> group "Customer"
+  let test (node : Node) =
+    let address lbl =
+      Formlet.value Address.New
+      <*> any       "C/O"
+      <*> notEmpty  "Address"
+      <*> notEmpty  "Zip"
+      <*> notEmpty  "City"
+      <*> any       "County"
+      <*> any       "Country"
+      |> group lbl
 
-      let company =
-        Formlet.value Company.New
-        <*> notEmpty  "Company name"
-        <*> notEmpty  "Company no"
-        |>> Company
-        |> group "Company"
+    let customer =
+      Formlet.value Customer.New
+      <*> notEmpty  "First name"
+      <*> notEmpty  "Last name"
+      <*> socialNo  "Social no"
+      |>> Customer
+      |> group "Customer"
 
-      let entity =
-        formlet {
-          let! isCompany  = checkBox "Is company?"
+    let company =
+      Formlet.value Company.New
+      <*> notEmpty  "Company name"
+      <*> notEmpty  "Company no"
+      |>> Company
+      |> group "Company"
 
-          let! entity     =
-            if isCompany then
-              company
-            else
-              customer
+    let entity =
+      formlet {
+        let! entity = select "What legal entity is the registration for?" [|"Customer", customer; "Company", company|]
 
-          let! invoiceAddress = address "Invoice Address"
+        let! invoiceAddress = address "Invoice Address"
 
-          let! useSeparateDeliveryAddress = checkBox "Separate delivery address?"
+        let! useSeparateDeliveryAddress = checkBox "Separate delivery address?"
 
-          let! deliveryAddress =
-            if useSeparateDeliveryAddress then
-              address "Delivery Address" |>> Some
-            else
-              Formlet.value None
+        let! deliveryAddress =
+          if useSeparateDeliveryAddress then
+            address "Delivery Address" |>> Some
+          else
+            Formlet.value None
 
-          return Registration.New entity invoiceAddress deliveryAddress
-        }
+        return Registration.New entity invoiceAddress deliveryAddress
+      }
 
-      let form =
-        entity
-        |> Enhance.withSubmit
-        |> Surround.withElement Form ""
+    let form =
+      entity
+      |> Enhance.withSubmit
+      |> Surround.withElement Form ""
 
-      View.attachTo form node
+    View.attachTo form node
+
 [<EntryPoint>]
 let main argv =
 

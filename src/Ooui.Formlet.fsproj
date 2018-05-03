@@ -6,9 +6,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Ooui.Formlet.fs" />
+    <Compile Include="Ooui.Formlets.Core.fs" />
+    <Compile Include="Ooui.Formlets.Bootstrap.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
+
+  <ItemGroup />
 
   <ItemGroup>
     <ProjectReference Include="..\Ooui\Ooui\Ooui.csproj" />
