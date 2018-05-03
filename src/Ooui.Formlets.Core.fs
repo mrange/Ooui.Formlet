@@ -13,9 +13,16 @@ module Maybe =
   let inline just v = Just v
   let nothing<'T>   = Nothing
 
-type FormletContext = FC of unit
-
-type [<Struct>] FormletChangeNotification = FCN of (unit -> unit)
+type FormletContext = 
+  {
+    ChangeNotification  : TargetEventArgs -> unit
+    ResetNotification   : TargetEventArgs -> unit
+  }
+  static member New cn rn : FormletContext =
+    {
+      ChangeNotification  = cn
+      ResetNotification   = rn
+    }
 
 type FormletElement = Ooui.Node
 
@@ -75,14 +82,14 @@ type [<RequireQualifiedAccess>] FormletFailureTree =
 type [<Struct>] FormletResult<'T> = FR of 'T*FormletFailureTree*FormletTree
 
 type [<Struct>] Formlet<'T> =
-  | FL of (FormletContext -> FormletChangeNotification -> FormletFailureContext -> FormletTree -> FormletResult<'T>)
+  | FL of (FormletContext -> FormletFailureContext -> FormletTree -> FormletResult<'T>)
 
 module Details =
   let inline refEq l r = System.Object.ReferenceEquals (l, r)
 
-  let inline fadapt (FL t) = OptimizedClosures.FSharpFunc<_, _, _, _, _>.Adapt t
+  let inline fadapt (FL t) = OptimizedClosures.FSharpFunc<_, _, _, _>.Adapt t
 
-  let inline finvoke (t : OptimizedClosures.FSharpFunc<_, _, _, _, _>) fc fcn ffc ft = t.Invoke (fc, fcn, ffc, ft)
+  let inline finvoke (t : OptimizedClosures.FSharpFunc<_, _, _, _>) fc ffc ft = t.Invoke (fc, ffc, ft)
 
   let rec findElement (ft : FormletTree) =
     match ft with
@@ -107,111 +114,111 @@ module Formlet =
   open FSharp.Core.Printf
 
   let value (v : 'T) : Formlet<'T> =
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
       FR (v, FormletFailureTree.Empty, FormletTree.Empty)
 
   let failWith (fv : 'T) msg : Formlet<'T>  =
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
       FR (fv, FormletFailureTree.Failure (ffc, msg), FormletTree.Empty)
 
   let failWithf fv fmt = kprintf (failWith fv) fmt
 
   let bind (t : Formlet<'T>) (uf : 'T -> Formlet<'U>) : Formlet<'U> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let tft, uft =
         match ft with
         | FormletTree.Fork (tft, uft) -> tft              , uft
         | _                           -> FormletTree.Empty, FormletTree.Empty
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc tft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc tft
 
       let u  = uf tv
       let uf = fadapt u
 
-      let (FR (uv, ufft, uft)) = finvoke uf fc fcn ffc uft
+      let (FR (uv, ufft, uft)) = finvoke uf fc ffc uft
 
       FR (uv, FormletFailureTree.Join tfft ufft, FormletTree.Fork (tft, uft))
 
   let apply (f: Formlet<'T -> 'U>) (t : Formlet<'T>) : Formlet<'U> =
     let ff = fadapt f
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let fft, tft =
         match ft with
         | FormletTree.Fork (fft, tft) -> fft              , tft
         | _                           -> FormletTree.Empty, FormletTree.Empty
 
-      let (FR (ff, ffft, fft)) = finvoke ff fc fcn ffc fft
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc tft
+      let (FR (ff, ffft, fft)) = finvoke ff fc ffc fft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc tft
 
       FR (ff tv, FormletFailureTree.Join ffft tfft, FormletTree.Fork (fft, tft))
 
   let map m (t : Formlet<'T>) : Formlet<'U> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc ft
 
       FR (m tv, tfft, tft)
 
   let andAlso (t: Formlet<'T>) (u : Formlet<'U>) : Formlet<'T*'U> =
     let tf = fadapt t
     let uf = fadapt u
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let tft, uft =
         match ft with
         | FormletTree.Fork (tft, uft) -> tft              , uft
         | _                           -> FormletTree.Empty, FormletTree.Empty
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc tft
-      let (FR (uv, ufft, uft)) = finvoke uf fc fcn ffc uft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc tft
+      let (FR (uv, ufft, uft)) = finvoke uf fc ffc uft
 
       FR ((tv, uv), FormletFailureTree.Join tfft ufft, FormletTree.Fork (tft, uft))
 
   let unwrap (t : Formlet<Formlet<'T>>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let tft, uft =
         match ft with
         | FormletTree.Fork (tft, uft) -> tft              , uft
         | _                           -> FormletTree.Empty, FormletTree.Empty
 
-      let (FR (u, tfft, tft)) = finvoke tf fc fcn ffc tft
+      let (FR (u, tfft, tft)) = finvoke tf fc ffc tft
 
       let uf = fadapt u
 
-      let (FR (uv, ufft, uft)) = finvoke uf fc fcn ffc uft
+      let (FR (uv, ufft, uft)) = finvoke uf fc ffc uft
 
       FR (uv, FormletFailureTree.Join tfft ufft, FormletTree.Fork (tft, uft))
 
   let debug nm (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let ft =
         match ft with
         | FormletTree.Debug (_, sft)    -> sft
         | _                             -> ft
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc ft
 
       FR (tv, tfft, FormletTree.Debug (nm, tft))
 
   let tag nm (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let ft =
         match ft with
         | FormletTree.Tag (snm, sft) when snm.Equals nm -> sft
         | _                                             -> FormletTree.Empty
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc ft
 
       FR (tv, tfft, FormletTree.Tag (nm, tft))
 
@@ -232,9 +239,9 @@ type Formlet<'T> with
 module Validate =
   let validate (validator : 'T -> string maybe) (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
-      let tfr = finvoke tf fc fcn ffc ft
+      let tfr = finvoke tf fc ffc ft
       let (FR (tv, tfft, tft)) = tfr
 
       match validator tv with
@@ -262,7 +269,7 @@ module Validate =
 module Surround =
   let withElement (creator : unit -> #Element) ``class`` (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let e, ft =
         match ft with
@@ -275,16 +282,16 @@ module Surround =
       if System.String.IsNullOrEmpty ``class`` |> not then
         e.ClassName <- ``class``
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc ft
 
       FR (tv, tfft, FormletTree.NestedElement (e, e, tft))
 
 module Enhance =
   let withClass ``class`` (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
-      let tfr = finvoke tf fc fcn ffc ft
+      let tfr = finvoke tf fc ffc ft
       let (FR (tv, tfft, tft)) = tfr
 
       match findElement tft with
@@ -295,7 +302,7 @@ module Enhance =
 
   let withLabel label (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let e, ft =
         match ft with
@@ -307,7 +314,7 @@ module Enhance =
 
       e.Text <- label
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn (ffc.Append label) ft
+      let (FR (tv, tfft, tft)) = finvoke tf fc (ffc.Append label) ft
 
       match findElement tft with
       | Just element  -> e.For <- element
@@ -325,15 +332,15 @@ module Inputs =
     end
 
   let input (input : Input<'T>) : Formlet<'T> =
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
       let e =
         match ft with
         | FormletTree.Element (:? Input as e) when e.Type = input.InputType ->
           e
         | _ ->
           let e = Input input.InputType
-          let (FCN fcn) = fcn
-          e.Change.Add (fun _ -> fcn ())
+          let cn = fc.ChangeNotification
+          e.Change.Add fc.ChangeNotification
           input.Init e
           e
 
@@ -373,16 +380,19 @@ module View =
       buildTree nestedChildren ft
       node.ReplaceChildren nestedChildren
     let mutable ft  = FormletTree.Empty
-    let fc          = FC ()
     let ffc         = FFC []
     let tf          = fadapt t
-    let rec fcn     = FCN (fun () ->
-        printfn "Change request"
-        update ()
-      )
+    let rec cn _    =
+      printfn "Change request"
+      update ()
+    and rn _        =
+      printfn "Reset request"
+      ft <- FormletTree.Empty
+      update ()
+    and fc          = FormletContext.New cn rn
     and update ()   =
       printfn "FormletTree(Before): %A" ft
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc ft
       printfn "Formlet Tree(After): %A" tft
       printfn "Value: %A" tv
       printfn "Failure Tree: %A" tfft

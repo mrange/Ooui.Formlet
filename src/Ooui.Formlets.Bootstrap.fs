@@ -65,14 +65,14 @@ module Enhance =
 
   let withValidation (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let ft, v =
         match ft with
         | FormletTree.Append (FormletTree.Element (:? Input) as ft, v) -> ft, v
         | _ -> FormletTree.Empty, null
 
-      let tfr = finvoke tf fc fcn ffc ft
+      let tfr = finvoke tf fc ffc ft
       let (FR (tv, tfft, tft)) = tfr
 
       let ntft =
@@ -133,7 +133,7 @@ module Enhance =
 
   let withLabeledBox label (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let e, ft =
         match ft with
@@ -146,13 +146,13 @@ module Enhance =
 
       e.Title <- label
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn (ffc.Append label) ft
+      let (FR (tv, tfft, tft)) = finvoke tf fc (ffc.Append label) ft
 
       FR (tv, tfft, FormletTree.NestedElement (e, e.Content, tft))
 
   let withBox (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let e, ft =
         match ft with
@@ -163,13 +163,13 @@ module Enhance =
           e.Initialize ()
           e, FormletTree.Empty
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc ft
 
       FR (tv, tfft, FormletTree.NestedElement (e, e.Content, tft))
 
   let withSubmit (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
 
       let e, ft =
         match ft with
@@ -180,7 +180,7 @@ module Enhance =
           e.Initialize ()
           e, FormletTree.Empty
 
-      let (FR (tv, tfft, tft)) = finvoke tf fc fcn ffc ft
+      let (FR (tv, tfft, tft)) = finvoke tf fc ffc ft
 
       match e.GetLocalAttribute "FormletFailureTree" with
       | (:? FormletFailureTree as fft) when fft = tfft -> ()
@@ -219,15 +219,14 @@ module Inputs =
   let select (options : (string*'T) []) : Formlet<'T> =
     if options.Length = 0 then
       failwith "select - expected at least one choice"
-    FL <| fun fc fcn ffc ft ->
+    FL <| fun fc ffc ft ->
       let e =
         match ft with
         | FormletTree.Element (:? Select as e) ->
           e
         | _ ->
           let e = Select ()
-          let (FCN fcn) = fcn
-          e.Change.Add (fun _ -> fcn ())
+          e.Change.Add fc.ChangeNotification
           e
 
       e.ClassName <- "form-control"
