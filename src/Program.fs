@@ -131,7 +131,7 @@ module Test =
       |> Enhance.withSubmit
       |> Surround.withElement Form ""
 
-    View.attachTo form node
+    View.attachTo form (printfn "Submitted: %A") node
 
 [<EntryPoint>]
 let main argv =

@@ -24,37 +24,57 @@ module Details =
   type GroupBox (group : string) =
     inherit Div ()
 
-    let title     = Div ()
+    let header    = Div ()
     let content   = Div ()
-    let titleText = TextNode group
 
     member x.Initialize () =
       if x.Children.Count = 0 then
-        x.ClassName       <- "card mb-3"
-        title.ClassName   <- "card-header"
-        content.ClassName <- "card-body"
-        x.AppendChild title           |> ignore
+        x.ClassName         <- "card mb-3"
+        header.ClassName    <- "card-header"
+        content.ClassName   <- "card-body"
+        x.AppendChild header          |> ignore
         x.AppendChild content         |> ignore
-        title.AppendChild titleText   |> ignore
 
-    member x.Title
-      with  get () = titleText.Text
-      and   set v  = titleText.Text <- v
+    member x.Header   = header
     member x.Content  = content
 
-  type Submit (label : string) =
+  type Submit (fc : FormletContext, label : string) =
     inherit Div ()
 
-    let header  = GroupBox label
+    let submit  = Button ()
+    let reset   = Button ()
+    let text    = Span ()
+
+    let legend  = GroupBox label
     let content = Div ()
 
     member x.Initialize () =
       if x.Children.Count = 0 then
-        header.Initialize ()
-        x.AppendChild header  |> ignore
-        x.AppendChild content |> ignore
+        legend.Initialize ()
 
-    member x.Header     = header
+        submit.Type               <- ButtonType.Button
+        submit.Text               <- "Submit"
+        submit.Click.Add          fc.SubmitNotification
+        submit.ClassName          <- "btn btn-dark"
+        submit.Style.MarginRight  <- "8px"
+
+        reset.Type                <- ButtonType.Button
+        reset.Text                <- "Reset"
+        reset.Click.Add           fc.ResetNotification
+        reset.ClassName           <- "btn btn-warning"
+        reset.Style.MarginRight   <- "8px"
+
+        text.Style.FontSize       <- "larger"
+
+        legend.Header.AppendChild submit  |> ignore
+        legend.Header.AppendChild reset   |> ignore
+        legend.Header.AppendChild text    |> ignore
+
+        x.AppendChild legend              |> ignore
+        x.AppendChild content             |> ignore
+
+    member x.Legend     = legend
+    member x.LegendText = text
     member x.Content    = content
 
   let regexValidation = Regex ("is-(in)?valid", RegexOptions.CultureInvariant ||| RegexOptions.Compiled ||| RegexOptions.Singleline)
@@ -144,7 +164,7 @@ module Enhance =
           e.Initialize ()
           e, FormletTree.Empty
 
-      e.Title <- label
+      e.Header.Text <- label
 
       let (FR (tv, tfft, tft)) = finvoke tf fc (ffc.Append label) ft
 
@@ -176,7 +196,7 @@ module Enhance =
         | FormletTree.NestedElement (:? Submit as e, _, sft) ->
           e, sft
         | _ ->
-          let e = Submit "All is good"
+          let e = Submit (fc, "All is good")
           e.Initialize ()
           e, FormletTree.Empty
 
@@ -188,12 +208,12 @@ module Enhance =
         e.SetLocalAttribute ("FormletFailureTree", box tfft)
         match tfft with
         | FormletFailureTree.Empty ->
-          e.Header.ClassName  <- "card mb-3 text-white bg-success"
-          e.Header.Title      <- "Ready to submit!"
-          e.Header.Content.ReplaceChildren([|TextNode "All is good!"|])
+          e.Legend.ClassName        <- "card mb-3 text-white bg-success"
+          e.LegendText.Text         <- "Ready to submit!"
+          e.Legend.Content.ReplaceChildren [|TextNode "All is good!"|]
         | _ ->
-          e.Header.ClassName  <- "card mb-3 text-white bg-danger"
-          e.Header.Title      <- "Resolve validation error(s)"
+          e.Legend.ClassName        <- "card mb-3 text-white bg-danger"
+          e.LegendText.Text         <- "Resolve validation error(s)"
           let list = List false
           let failures = tfft.ContextfulFailures ()
           // TODO: Optimize
@@ -202,7 +222,7 @@ module Enhance =
             li.AppendChild (TextNode (sprintf "§ %s: %s" ctx msg)) |> ignore
             list.AppendChild li |> ignore
 
-          e.Header.Content.ReplaceChildren([|list|])
+          e.Legend.Content.ReplaceChildren [|list|]
 
       FR (tv, tfft, FormletTree.NestedElement (e, e.Content, tft))
 
@@ -210,9 +230,9 @@ module Inputs =
   let checkBox initial : Formlet<bool> =
     { new Input<_> (InputType.Checkbox) with
       override x.Init input =
-        input.IsChecked <- initial
-      override x.Update input =
         input.ClassName   <- "form-check-input"
+        input.IsChecked   <- initial
+      override x.Update input =
         input.IsChecked
     } |> input
 
@@ -226,10 +246,9 @@ module Inputs =
           e
         | _ ->
           let e = Select ()
+          e.ClassName <- "form-control"
           e.Change.Add fc.ChangeNotification
           e
-
-      e.ClassName <- "form-control"
 
       match e.GetLocalAttribute "options" with
       | :? ((string*'T) []) as existingOptions when refEq existingOptions options ->
@@ -246,7 +265,7 @@ module Inputs =
         loop 0
 
       let b, v = System.Int32.TryParse e.Value
-        
+
       if b then
         FR (options.[v] |> snd, FormletFailureTree.Empty, FormletTree.Element e)
       else
@@ -256,8 +275,8 @@ module Inputs =
     { new Input<_> (InputType.Text) with
       override x.Init input =
         input.Value       <- initial
-      override x.Update input =
         input.ClassName   <- "form-control"
+      override x.Update input =
         input.Placeholder <- placeholder
         input.Value
     } |> input

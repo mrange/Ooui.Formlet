@@ -13,15 +13,17 @@ module Maybe =
   let inline just v = Just v
   let nothing<'T>   = Nothing
 
-type FormletContext = 
+type FormletContext =
   {
     ChangeNotification  : TargetEventArgs -> unit
     ResetNotification   : TargetEventArgs -> unit
+    SubmitNotification  : TargetEventArgs -> unit
   }
-  static member New cn rn : FormletContext =
+  static member New cn rn sn : FormletContext =
     {
       ChangeNotification  = cn
       ResetNotification   = rn
+      SubmitNotification  = sn
     }
 
 type FormletElement = Ooui.Node
@@ -277,29 +279,15 @@ module Surround =
           e, sft
         | _ ->
           let e = creator ()
+          if System.String.IsNullOrEmpty ``class`` |> not then
+            e.ClassName <- ``class``
           e, FormletTree.Empty
-
-      if System.String.IsNullOrEmpty ``class`` |> not then
-        e.ClassName <- ``class``
 
       let (FR (tv, tfft, tft)) = finvoke tf fc ffc ft
 
       FR (tv, tfft, FormletTree.NestedElement (e, e, tft))
 
 module Enhance =
-  let withClass ``class`` (t : Formlet<'T>) : Formlet<'T> =
-    let tf = fadapt t
-    FL <| fun fc ffc ft ->
-
-      let tfr = finvoke tf fc ffc ft
-      let (FR (tv, tfft, tft)) = tfr
-
-      match findElement tft with
-      | Just element  -> element.ClassName <- ``class``
-      | Nothing       -> ()
-
-      tfr
-
   let withLabel label (t : Formlet<'T>) : Formlet<'T> =
     let tf = fadapt t
     FL <| fun fc ffc ft ->
@@ -349,7 +337,7 @@ module Inputs =
       FR (v, FormletFailureTree.Empty, FormletTree.Element e)
 
 module View =
-  let attachTo (t : Formlet<'T>) (node : Node) : unit =
+  let attachTo (t : Formlet<'T>) (onSubmit : 'T -> unit) (node : Node) : unit =
     let rec buildTree (children : ResizeArray<Node>) (ft : FormletTree) =
       let inline add e =
         if isNull e |> not then
@@ -389,7 +377,14 @@ module View =
       printfn "Reset request"
       ft <- FormletTree.Empty
       update ()
-    and fc          = FormletContext.New cn rn
+    and sn _        =
+      printfn "Submit request"
+      let (FR (tv, tfft, _)) = finvoke tf fc ffc ft
+      match tfft with
+      | FormletFailureTree.Empty -> onSubmit tv
+      | _ -> ()
+      ()
+    and fc          = FormletContext.New cn rn sn
     and update ()   =
       printfn "FormletTree(Before): %A" ft
       let (FR (tv, tfft, tft)) = finvoke tf fc ffc ft
