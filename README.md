@@ -12,3 +12,5 @@ Formlets for Ooui
 cd src
 dotnet run
 ```
+
+Open localhost:8800/formlet in browser
