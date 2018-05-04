@@ -25,13 +25,13 @@ module Test =
         Country       = country
       }
 
-  type Customer =
+  type Person =
     {
       FirstName     : string
       LastName      : string
       SocialNo      : string
     }
-    static member New fn ln sno : Customer =
+    static member New fn ln sno : Person =
       {
         FirstName     = fn
         LastName      = ln
@@ -49,20 +49,20 @@ module Test =
         CompanyNo     = cno
       }
 
-  type Entity =
-    | Customer  of Customer
+  type LegalEntity =
+    | Person    of Person
     | Company   of Company
 
 
-  type Registration =
+  type CustomerRegistration =
     {
-      Entity          : Entity
+      LegalEntity     : LegalEntity
       InvoiceAddress  : Address
       DeliveryAddress : Address option
     }
-    static member New e ia da : Registration =
+    static member New le ia da : CustomerRegistration =
       {
-        Entity          = e
+        LegalEntity     = le
         InvoiceAddress  = ia
         DeliveryAddress = da
       }
@@ -94,13 +94,13 @@ module Test =
       <*> any       "Country"
       |> group lbl
 
-    let customer =
-      Formlet.value Customer.New
+    let person =
+      Formlet.value Person.New
       <*> notEmpty  "First name"
       <*> notEmpty  "Last name"
       <*> socialNo  "Social no"
-      |>> Customer
-      |> group "Customer"
+      |>> Person
+      |> group "Person"
 
     let company =
       Formlet.value Company.New
@@ -111,7 +111,7 @@ module Test =
 
     let entity =
       formlet {
-        let! entity = select "What legal entity is the registration for?" [|"Customer", customer; "Company", company|]
+        let! legalEntity = select "What legal entity is the registration for?" [|"A person", person; "A company", company|]
 
         let! invoiceAddress = address "Invoice Address"
 
@@ -123,7 +123,7 @@ module Test =
           else
             Formlet.value None
 
-        return Registration.New entity invoiceAddress deliveryAddress
+        return CustomerRegistration.New legalEntity invoiceAddress deliveryAddress
       }
 
     let form =
