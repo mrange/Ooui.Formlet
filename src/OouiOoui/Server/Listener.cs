@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OouiOoui.Server
@@ -23,6 +24,9 @@ namespace OouiOoui.Server
 
     async Task<Unit> WaitForContext()
     {
+      "Waiting for connection".TraceInfo();
+      $"{Environment.StackTrace}".TraceInfo();
+      
       var httpListenerContext = await listener.GetContextAsync().NoSynchronizationContext();
 
       var session = new Session(httpListenerContext);

@@ -1,10 +1,19 @@
 ﻿namespace OouiOoui.Console
 {
+  using System;
+
   class Program
   {
     static void Main(string[] args)
     {
-      var listener = new OouiOoui.Server.Listener();
+      using(var listener = new OouiOoui.Server.Listener())
+      { 
+        var startTask = listener.Start();
+
+        Console.WriteLine("Press any key");
+
+        Console.ReadLine();
+      }
     }
   }
 }
